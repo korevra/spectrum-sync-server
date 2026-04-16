@@ -1,0 +1,9 @@
+node_modules
+state.json
+state.json.tmp
+*.log
+.git
+test-client.js
+test-client-send.js
+README.md
+DEPLOY.md
