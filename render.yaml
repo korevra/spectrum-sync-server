@@ -1,0 +1,14 @@
+services:
+  - type: web
+    runtime: node
+    name: spectrum-sync
+    plan: free
+    buildCommand: npm install
+    startCommand: node server.js
+    envVars:
+      - key: PORT
+        value: 10000
+      - key: HOST
+        value: 0.0.0.0
+      - key: PERSIST_MS
+        value: 2000
