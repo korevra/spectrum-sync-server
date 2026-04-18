@@ -534,19 +534,42 @@ function renderText (report) {
 
 /* ------------------------------------------------------------------ *
  * Recipients
+ * ------------------------------------------------------------------ *
+ * Resolution order (all sources are merged, de-duplicated by email):
+ *   1. db.users            — active users with role admin/manager/cfo/coo/ceo
+ *   2. db.policies.reports.extraRecipients — saved from the admin UI
+ *   3. process.env.REPORTS_RECIPIENTS — fallback CSV from Render env vars
+ *
+ * Every entry accepts either "email@host" or "Friendly Name <email@host>".
  * ------------------------------------------------------------------ */
+function parseRecipient (raw) {
+  const s = String(raw || '').trim();
+  if (!s) return null;
+  const m = /^(.+?)<([^>]+)>$/.exec(s);
+  if (m) return { name: m[1].trim().replace(/^["']|["']$/g, ''), email: m[2].trim() };
+  return { name: s, email: s };
+}
+
 function resolveRecipients (db) {
-  const settings = db.policies?.reports || {};
-  const base = (db.users || [])
-    .filter(u => u.status !== 'inactive' && u.email && ['admin', 'manager', 'cfo', 'coo', 'ceo'].includes(u.role))
+  const settings = (db && db.policies && db.policies.reports) || {};
+
+  const base = ((db && db.users) || [])
+    .filter(u => u && u.status !== 'inactive' && u.email &&
+      ['admin', 'manager', 'cfo', 'coo', 'ceo'].includes(u.role))
     .map(u => ({ name: u.name, email: u.email }));
-  const extra = (settings.extraRecipients || []).map(e => {
-    const m = /^(.+?)<([^>]+)>$/.exec(String(e).trim());
-    if (m) return { name: m[1].trim(), email: m[2].trim() };
-    return { name: e, email: e };
-  });
+
+  const extra = (settings.extraRecipients || [])
+    .map(parseRecipient)
+    .filter(Boolean);
+
+  // Env-var fallback — comma or newline separated
+  const envList = String(process.env.REPORTS_RECIPIENTS || '')
+    .split(/[,\n]/)
+    .map(parseRecipient)
+    .filter(Boolean);
+
   const seen = new Set();
-  return [...base, ...extra].filter(r => {
+  return [...base, ...extra, ...envList].filter(r => {
     const k = (r.email || '').toLowerCase();
     if (!k || seen.has(k)) return false;
     seen.add(k);
@@ -796,6 +819,27 @@ function handle (req, res) {
       cronAvailable: !!cron,
       nodemailerAvailable: !!nodemailer,
       schedule: _state?.policies?.reports || null
+    }));
+    return true;
+  }
+
+  // GET /reports/recipients — resolved list (users + saved extras + env var)
+  if (req.method === 'GET' && url.pathname === '/reports/recipients') {
+    const resolved = resolveRecipients(_state || {});
+    const settings = _state?.policies?.reports || {};
+    res.writeHead(200, { 'Content-Type': 'application/json' });
+    res.end(JSON.stringify({
+      ok: true,
+      recipients: resolved,
+      sources: {
+        users: ((_state?.users) || [])
+          .filter(u => u && u.status !== 'inactive' && u.email &&
+            ['admin', 'manager', 'cfo', 'coo', 'ceo'].includes(u.role))
+          .map(u => ({ name: u.name, email: u.email, role: u.role })),
+        extraRecipients: settings.extraRecipients || [],
+        envFallback: String(process.env.REPORTS_RECIPIENTS || '')
+          .split(/[,\n]/).map(s => s.trim()).filter(Boolean)
+      }
     }));
     return true;
   }
