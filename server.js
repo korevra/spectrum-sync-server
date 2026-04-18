@@ -49,6 +49,7 @@ const fs = require('fs');
 const path = require('path');
 const { WebSocketServer } = require('ws');
 const reportsRunner = require('./reports');
+const mailRunner = require('./mail');
 
 /* ---------------------------------------------------------------- *
  * Config
@@ -288,6 +289,11 @@ const httpServer = http.createServer((req, res) => {
     if (reportsApi && reportsApi.handle(req, res)) return;
   }
 
+  // Mail relay — handles /mail/* endpoints (POST from PWA webhook mode)
+  if (req.url.startsWith('/mail')) {
+    if (mailApi && mailApi.handle(req, res)) return;
+  }
+
   if (req.url === '/' || req.url === '') {
     res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
     res.end(`<!doctype html><meta charset="utf-8"><title>Spectrum Sync</title>
@@ -497,6 +503,18 @@ try {
   log('Reports runner init error: ' + e.message);
 }
 
+let mailApi = null;
+try {
+  mailApi = mailRunner.attach({
+    state,
+    persist: queuePersist,
+    log: (msg) => log('[mail] ' + msg)
+  });
+  log('Mail relay attached');
+} catch (e) {
+  log('Mail relay init error: ' + e.message);
+}
+
 httpServer.listen(PORT, HOST, () => {
   log('═════════════════════════════════════════════════════════');
   log(`  SPECTRUM SYNC SERVER`);
@@ -505,5 +523,6 @@ httpServer.listen(PORT, HOST, () => {
   log(`  state file  ${STATE_FILE}`);
   log(`  initialized ${state.__meta?.initialized ? 'yes' : 'no (awaiting first client seed)'}`);
   log(`  reports API ${reportsApi ? 'ready' : 'disabled'}`);
+  log(`  mail relay  ${mailApi ? 'ready at POST /mail/send' : 'disabled'}`);
   log('═════════════════════════════════════════════════════════');
 });
