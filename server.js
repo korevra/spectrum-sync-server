@@ -48,6 +48,7 @@ const http = require('http');
 const fs = require('fs');
 const path = require('path');
 const { WebSocketServer } = require('ws');
+const reportsRunner = require('./reports');
 
 /* ---------------------------------------------------------------- *
  * Config
@@ -65,7 +66,8 @@ const MUTABLE_TABLES = new Set([
   'leave', 'expense', 'kpi', 'tickets', 'smtpConfig',
   'integrations', 'roles', 'enrollments', 'policies',
   'training', 'surveys', 'partners', 'partnerOrders',
-  'channels', 'attendance', 'notices'
+  'channels', 'attendance', 'notices',
+  'reports' // v3.2.1 — saved performance reports
 ]);
 const APPEND_ONLY_TABLES = new Set([
   'messages', 'psi', 'audit', 'emails', 'notifications',
@@ -281,6 +283,11 @@ const httpServer = http.createServer((req, res) => {
     return;
   }
 
+  // Reports runner — handles /reports/* endpoints
+  if (req.url.startsWith('/reports')) {
+    if (reportsApi && reportsApi.handle(req, res)) return;
+  }
+
   if (req.url === '/' || req.url === '') {
     res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
     res.end(`<!doctype html><meta charset="utf-8"><title>Spectrum Sync</title>
@@ -474,6 +481,22 @@ process.on('SIGTERM', shutdown);
 /* ---------------------------------------------------------------- *
  * Start
  * ---------------------------------------------------------------- */
+/* ---------------------------------------------------------------- *
+ * Reports runner — daily/weekly/monthly scheduled email reports
+ * ---------------------------------------------------------------- */
+let reportsApi = null;
+try {
+  reportsApi = reportsRunner.attach({
+    state,
+    persist: queuePersist,
+    broadcast: (env) => broadcast(env, null),
+    log: (msg) => log(msg)
+  });
+  log('Reports runner attached');
+} catch (e) {
+  log('Reports runner init error: ' + e.message);
+}
+
 httpServer.listen(PORT, HOST, () => {
   log('═════════════════════════════════════════════════════════');
   log(`  SPECTRUM SYNC SERVER`);
@@ -481,5 +504,6 @@ httpServer.listen(PORT, HOST, () => {
   log(`  WS endpoint ws://${HOST}:${PORT}/sync`);
   log(`  state file  ${STATE_FILE}`);
   log(`  initialized ${state.__meta?.initialized ? 'yes' : 'no (awaiting first client seed)'}`);
+  log(`  reports API ${reportsApi ? 'ready' : 'disabled'}`);
   log('═════════════════════════════════════════════════════════');
 });

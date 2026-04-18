@@ -12,3 +12,29 @@ services:
         value: 0.0.0.0
       - key: PERSIST_MS
         value: 2000
+      # ── Reports & BI timezone ───────────────────────────────────────────
+      # Controls the timezone that node-cron evaluates schedules in
+      # (daily@1am, weekly Sun 1am, monthly 1st@1am). Matches the office
+      # local time so "1 a.m." means 1 a.m. in Lagos, not UTC.
+      - key: TZ
+        value: Africa/Lagos
+      # ── SMTP credentials for automated Reports & BI emails ──────────────
+      # Leave these unset in render.yaml and configure them in the Render
+      # dashboard (Environment → Environment Variables) so secrets never
+      # land in git. The server gracefully no-ops email delivery if any
+      # of HOST / USER / PASS is missing (cron still computes & saves the
+      # report so the Reports Center can show it and users can download).
+      - key: SMTP_HOST
+        sync: false          # configure in Render dashboard (e.g. smtp.gmail.com)
+      - key: SMTP_PORT
+        sync: false          # 587 (STARTTLS) or 465 (TLS wrapper)
+      - key: SMTP_SECURE
+        sync: false          # "true" for port 465, "false" for 587
+      - key: SMTP_USER
+        sync: false          # SMTP login (usually the from-address)
+      - key: SMTP_PASS
+        sync: false          # App password or SMTP API key — NEVER commit
+      - key: SMTP_FROM
+        sync: false          # "Spectrum BI <reports@yourcompany.com>"
+      - key: REPORTS_RECIPIENTS
+        sync: false          # fallback CSV of emails if none saved in admin UI
