@@ -72,12 +72,18 @@ function resolveAuth (overrides) {
 }
 
 function safeDescribe (auth) {
+  const p = auth.pass || '';
   return {
     host: auth.host, port: auth.port, secure: auth.secure,
     user: auth.user || null,
     from: auth.from || null,
     source: auth.source,
-    passwordPresent: !!auth.pass
+    passwordPresent: !!p,
+    passwordLen: p.length,
+    passwordHasSpaces: /\s/.test(p),
+    passwordMasked: p.length >= 8
+      ? p.slice(0, 2) + '*'.repeat(Math.max(0, p.length - 4)) + p.slice(-2)
+      : (p ? '*'.repeat(p.length) : '')
   };
 }
 
